@@ -18,7 +18,7 @@ class config:
             self.imresize = 1
             self.imrotate = 0
             self.minz = 0
-            self.maxz = 50
+            self.maxz = 3
             self.display = False
 
     class sparse:

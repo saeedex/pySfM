@@ -3,7 +3,6 @@ from iomodule import *
 from tracks import *
 from visualization import *
 from views import *
-#import pyboof as pb
 
 # configuring
 config = config()
@@ -14,7 +13,7 @@ Track = track()
 
 # load camera intrinsics
 Views.camera.loadintr(Images, config)
-#Views.camera.loadposes(Images, config)
+Views.camera.loadposes(Images, config)
 
 # detect features
 Views.sparse.detect(Images, config)
@@ -30,7 +29,7 @@ for mf in range(len(Images.color)-1):
     Views = Track.matchmap(Views, kf, config)
 
     # pose initialization
-    Views.camera.computepose(Views, Track, kf)
+    #Views.camera.computepose(Views, Track, kf)
 
     # triangulation
     Views, ntracks = Track.triangulate(Views, Images, kf, config)
