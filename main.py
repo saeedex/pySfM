@@ -1,45 +1,43 @@
 from config import *
-from iomodule import *
 from tracks import *
 from visualization import *
 from views import *
 
 # configuring
 config = config()
-Images = images()
-Images.load(config)
-Views = views(Images, config)
-Track = track()
+views = views()
+tracks = Track()
 
-# load camera intrinsics
-Views.camera.loadintr(Images, config)
-Views.camera.loadposes(Images, config)
+
+# load
+views.loadimages(config)
+views.initcameras(config)
+views.loadintr(config)
+views.loadposes(config)
 
 # detect features
-Views.sparse.detect(Images, config)
+views.detect(config)
 
 # sparse reconstruction
-Vis3d = vis3d() # this is for visualization
+v3d = v3d()
 
-for mf in range(len(Images.color)-1):
+for mf in range(len(views.color) - 1):
     kf = mf + 1
-    Views.graph.update(kf)
+    views.graph.update(kf)
 
     # sparse matching
-    Views = Track.matchmap(Views, kf, config)
+    tracks.matchmap(views, kf, config)
 
     # pose initialization
-    #Views.camera.computepose(Views, Track, kf)
+    #views.computepose(tracks, kf)
 
     # triangulation
-    Views, ntracks = Track.triangulate(Views, Images, kf, config)
-
-    # optimization
+    ntracks = tracks.triangulate(views, kf, config)
 
     # visualization
-    vis2d.reprojection(Track, Views, Images, kf, config)
-    Vis3d.update(Track, ntracks)
+    v2d.reprojection(tracks, views, kf, config)
+    v3d.update(tracks, ntracks)
 
 # visualization
-Vis3d.destroy()
-Vis3d.animate(Track)
+v3d.destroy()
+v3d.animate(tracks)

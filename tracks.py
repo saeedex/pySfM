@@ -1,7 +1,8 @@
 from config import *
 from views import *
 
-class track:
+
+class Track:
     def __init__(self):
         self.str = np.empty((0, 6), float)
         self.valid = np.empty(0, bool)
@@ -13,16 +14,16 @@ class track:
         self.inliers = []
 
     # matching current keyframe (kf) features with connected keyframes features (conviews)
-    def matchmap(self, Views, kf, config):
+    def matchmap(self, views, kf, config):
         conviews = np.zeros(0, int)
-        for i in range(len(Views.graph.conviews[kf])):
-            mf = Views.graph.conviews[kf][i]
-            fidx, ratio = track.match2views(Views, kf, mf, config)
+        for i in range(len(views.graph.conviews[kf])):
+            mf = views.graph.conviews[kf][i]
+            fidx, ratio = Track.match2views(views, kf, mf, config)
 
             if ratio > 0.1:
                 conviews = np.concatenate([np.array([mf], int), conviews])
-                kmatched = Views.sparse.matched[kf][fidx[:, 0]]
-                mmatched = Views.sparse.matched[mf][fidx[:, 1]]
+                kmatched = views.matched[kf][fidx[:, 0]]
+                mmatched = views.matched[mf][fidx[:, 1]]
 
                 # if matched feature is not previously matched create new tracks
                 nindices = np.multiply(~mmatched, ~kmatched).flatten()
@@ -30,8 +31,8 @@ class track:
                 nmidx = fidx[nindices, 1]
                 ntracks = np.arange(len(self.str), len(self.str) + len(nkidx))
                 self.create(nkidx)
-                Views.sparse.addtrack(self, ntracks, mf, nmidx)
-                Views.sparse.addtrack(self, ntracks, kf, nkidx)
+                views.addtrack(self, ntracks, mf, nmidx)
+                views.addtrack(self, ntracks, kf, nkidx)
                 self.addview(ntracks, mf, nmidx)
                 self.addview(ntracks, kf, nkidx)
 
@@ -39,35 +40,34 @@ class track:
                 cindices = np.multiply(mmatched, ~kmatched).flatten()
                 ckidx = fidx[cindices, 0]
                 cmidx = fidx[cindices, 1]
-                mtracks = Views.sparse.tracks[mf][cmidx]
-                Views.sparse.addtrack(self, mtracks, kf, ckidx)
+                mtracks = views.trackids[mf][cmidx]
+                views.addtrack(self, mtracks, kf, ckidx)
                 self.addview(mtracks, kf, ckidx)
 
                 cindices = np.multiply(~mmatched, kmatched).flatten()
                 ckidx = fidx[cindices, 0]
                 cmidx = fidx[cindices, 1]
-                ktracks = Views.sparse.tracks[kf][ckidx]
-                Views.sparse.addtrack(self, ktracks, mf, cmidx)
+                ktracks = views.trackids[kf][ckidx]
+                views.addtrack(self, ktracks, mf, cmidx)
                 self.addview(ktracks, mf, cmidx)
 
                 # check and handle duplicates
                 dindices = np.multiply(mmatched, kmatched).flatten()
                 dkidx = fidx[dindices, 0]
                 dmidx = fidx[dindices, 1]
-                ktracks = Views.sparse.tracks[kf][dkidx]
-                mtracks = Views.sparse.tracks[mf][dmidx]
+                ktracks = views.trackids[kf][dkidx]
+                mtracks = views.trackids[mf][dmidx]
                 check = np.not_equal(ktracks, mtracks)
 
                 if np.sum(check):
                     ktracks = ktracks[check]
                     mtracks = mtracks[check]
-                    Views.sparse.rmvtrack(self, ktracks)
+                    views.rmvtrack(self, ktracks)
                     self.rmvview(ktracks)
-                    Views.sparse.mrgtrack(self, mtracks, ktracks)
+                    views.mrgtrack(self, mtracks, ktracks)
                     self.mrgview(mtracks, ktracks)
 
-        Views.graph.conviews[kf] = conviews
-        return Views
+        views.graph.conviews[kf] = conviews
 
     def create(self, kidx):
         self.str = np.concatenate([self.str, np.zeros([len(kidx), 6], float)])
@@ -108,17 +108,16 @@ class track:
             self.res[i] = self.res[i][ia]
             self.inliers[i] = self.inliers[i][ia]
 
-
-    def evaluate(self, Views, tracks, config):
+    def evaluate(self, views, tracks, config):
         for j in range(len(tracks)):
             i = tracks[j]
 
             for k in range(len(self.views[i])):
                 kf = self.views[i][k]
                 idx = self.idx[i][k]
-                kobs = np.reshape(Views.sparse.obs[kf][idx, :], (1, 2))
+                kobs = np.reshape(views.obs[kf][idx, :], (1, 2))
                 point = np.reshape(self.str[i, :3], (1, 3))
-                iprj, iz = track.project(Views.camera.K[kf], Views.camera.pose[kf], point)
+                iprj, iz = Track.project(views.K[kf], views.pose[kf], point)
 
                 res = np.sum(np.square(iprj - kobs))
                 depth = iz
@@ -132,28 +131,28 @@ class track:
             self.valid[i] = ninliers > 0.6 * self.inliers[i].shape[0]
 
     # triangulate new tracks
-    def triangulate(self, Views, Images, kf, config):
-        kproj = np.dot(Views.camera.K[kf], Views.camera.pose[kf])
-        nkidx = np.multiply(Views.sparse.matched[kf], ~Views.sparse.tracked[kf]).flatten()
-        ntracks = Views.sparse.tracks[kf][nkidx]
-        nkobs = Views.sparse.obs[kf][nkidx, :]
+    def triangulate(self, views, kf, config):
+        kproj = np.dot(views.K[kf], views.pose[kf])
+        nkidx = np.multiply(views.matched[kf], ~views.tracked[kf]).flatten()
+        ntracks = views.trackids[kf][nkidx]
+        nkobs = views.obs[kf][nkidx, :]
 
         for j in range(len(ntracks)):
             i = ntracks[j]
             for k in range(len(self.views[i]) - 1):
                 mf = self.views[i][k]
                 nmidx = self.idx[i][k]
-                nmobs = Views.sparse.obs[mf][nmidx, :]
-                mproj = Views.camera.K[mf] @ Views.camera.pose[mf]
+                nmobs = views.obs[mf][nmidx, :]
+                mproj = views.K[mf] @ views.pose[mf]
                 point = cv2.triangulatePoints(mproj, kproj, nmobs, nkobs[j, :])
                 point = point / point[3]
                 self.str[ntracks[j], :3] = point[:3].T
 
-        self.getcolor(ntracks, Images.color[kf], nkobs)
-        self.evaluate(Views, ntracks, config)
+        self.getcolor(ntracks, views.color[kf], nkobs)
+        self.evaluate(views, ntracks, config)
         self.actview(ntracks)
-        Views.sparse.acttrack(self, ntracks)
-        return Views, ntracks
+        views.acttrack(self, ntracks)
+        return ntracks
 
     # get RGB color of observations
     def getcolor(self, ntracks, img, obs):
@@ -177,7 +176,6 @@ class track:
         r = r[idx]
         self.str[ntracks, 3:] = np.array([r, g, b]).T
 
-
     # project a point onto image frame
     @staticmethod
     def project(K, pose, points):
@@ -192,15 +190,15 @@ class track:
     # compute a reprojection error of a point
     @staticmethod
     def residual(K, pose, points, obs):
-        iprj, _ = track.project(K, pose, points)
+        iprj, _ = Track.project(K, pose, points)
         res = np.sum(np.square(iprj - obs), axis=1)
         return res
 
     # match features in keyframes kf and mf
     @staticmethod
-    def match2views(Views, kf, mf, config):
-        mdsc = Views.sparse.dsc[mf]
-        kdsc = Views.sparse.dsc[kf]
+    def match2views(views, kf, mf, config):
+        mdsc = views.dsc[mf]
+        kdsc = views.dsc[kf]
         matches = config.sparse.matcher.knnMatch(kdsc, mdsc, k=2)
         inlier_matches = []
 
@@ -211,5 +209,5 @@ class track:
                 fidx = np.append(fidx, np.array([[m.queryIdx, m.trainIdx]]), axis=0)
         fidx = fidx.astype(int)
         fidx = np.unique(fidx, axis=0)
-        ratio = fidx.shape[0] / Views.sparse.matched[kf].shape[0]
+        ratio = fidx.shape[0] / views.matched[kf].shape[0]
         return fidx, ratio

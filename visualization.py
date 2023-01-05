@@ -1,6 +1,7 @@
 from tracks import *
 
-class vis3d:
+
+class v3d:
     def __init__(self):
         self.vis = o3d.visualization.Visualizer()
         self.vis.create_window(visible=True)
@@ -30,14 +31,14 @@ class vis3d:
         self.vis.update_renderer()
 
     def animate(self, *args):
-        Track = args[0]
+        tracks = args[0]
 
         if len(args) > 1:
-            points = Track.str[args[1], :]
-            valid = Track.valid[args[1]]
+            points = tracks.str[args[1], :]
+            valid = tracks.valid[args[1]]
         else:
-            points = Track.str
-            valid = Track.valid
+            points = tracks.str
+            valid = tracks.valid
 
         points = points[valid, :]
         pcd = o3d.geometry.PointCloud()
@@ -56,7 +57,8 @@ class vis3d:
     def destroy(self):
         self.vis.destroy_window()
 
-class vis2d:
+
+class v2d:
     def observation(*args):
         radius = 2
         img = args[0]
@@ -70,14 +72,13 @@ class vis2d:
     def reprojection(*args):
         Track = args[0]
         Views = args[1]
-        Images = args[2]
-        kf = args[3]
-        config = args[4]
+        kf = args[2]
+        config = args[3]
 
         if config.sparse.display:
-            kimg = Images.color[kf]
-            kobs = Views.sparse.obs[kf][Views.sparse.tracked[kf], :]
-            tracks = Views.sparse.tracks[kf][Views.sparse.tracked[kf]]
+            kimg = Views.color[kf]
+            kobs = Views.obs[kf][Views.tracked[kf], :]
+            tracks = Views.trackids[kf][Views.tracked[kf]]
 
             valid = np.array(Track.valid)[tracks]
             removed = np.array(Track.removed)[tracks]
@@ -86,8 +87,8 @@ class vis2d:
             kobs = kobs[inliers, :]
             tracks = tracks[inliers]
             points = Track.str[tracks, :3]
-            prj, _ = track.project(Views.camera.K[kf], Views.camera.pose[kf], points)
-            vis2d.observation(kimg, prj, [0, 0, 255])
-            vis2d.observation(kimg, kobs, [255, 0, 0])
+            prj, _ = Track.project(Views.K[kf], Views.pose[kf], points)
+            v2d.observation(kimg, prj, [0, 0, 255])
+            v2d.observation(kimg, kobs, [255, 0, 0])
             cv2.imshow("Observations", kimg)
             cv2.waitKey(1)
